@@ -1,13 +1,3 @@
-// function triggerEffect() {
-//     const box = document.getElementById('box');
-//     box.classList.toggle('active');
-//   }
-
-//   function trig(){
-//     const box = document.getElementById('box');
-//     box.classList.toggle('active');
-//   }
-
 window.addEventListener("scroll", reveal);
 function reveal() {
   var reveals = document.querySelectorAll(".reveal");
@@ -40,7 +30,7 @@ window.onclick = function (event) {
   }
 };
 
-function price(p) {
+function quan() {
   var a = document.getElementsByName("filling");
   var p, i;
 

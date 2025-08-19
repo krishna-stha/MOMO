@@ -15,6 +15,16 @@ function reveal() {
   }
 }
 
+
+//for responsive dropdown menu
+const togglebtn = document.querySelector(".burger");
+const toggleburger = document.querySelector(".burger svg");
+const drop = document.querySelector(".dropdown");
+togglebtn.onclick = function () {
+  drop.classList.toggle("open");
+  const isopen = drop.classList.contains("open");
+};
+
 var modal = document.getElementById("myModal");
 var btn = document.getElementById("first");
 var span = document.getElementsByClassName("close")[0];

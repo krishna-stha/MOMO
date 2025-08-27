@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momoholics - Admin Panel</title>
+    
+    <!-- External libraries loaded from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+    <!-- 
+      EMBEDDED CONFIGURATION:
+      This replaces the need for an external 'js/config.js' file.
+    -->
+    <script>
+        // --- Supabase Configuration ---
+        // IMPORTANT: Replace with your actual Supabase Project URL and Anon Key.
+        const SUPABASE_URL = 'https://zwzpqjbrpacxwmmbdvqt.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3enBxamJycGFjeHdtbWJkdnF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU0MTIzMDEsImV4cCI6MjA3MDk4ODMwMX0.vAUWPj8pZ2TCGGQ7VLbAQOPxQysUX9T5Hr0JI-yjdUg';
+        
+        // This creates the client object used by the main script block at the bottom of this file.
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    </script>
+
+    <style>
+        :root {
+            --primary-bg: #f4f7fa; --sidebar-bg: #1f2937; --sidebar-hover: #374151;
+            --text-light: #f9fafb; --text-dark: #111827; --text-muted: #6b7280;
+            --border-color: #e5e7eb; --primary-accent: #3b82f6; --primary-accent-hover: #2563eb;
+            --danger: #ef4444; --danger-hover: #dc2626; --success: #22c55e; --warning: #f59e0b;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--primary-bg); color: var(--text-dark); height: 100vh; overflow: hidden; }
+        button, input, textarea, select { font-family: inherit; }
+
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        #login-box { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); text-align: center; width: 90%; max-width: 350px; }
+        #login-box h2 { margin-bottom: 20px; }
+        #login-box input { display: block; width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; }
+        #login-box button { width: 100%; padding: 12px; border: none; border-radius: 4px; background-color: var(--primary-accent); color: white; font-weight: bold; cursor: pointer; }
+        #login-error { color: red; margin-top: 10px; height: 1em; }
+        
+        #admin-wrapper { display: none; height: 100vh; display: flex; }
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); color: var(--text-light); display: flex; flex-direction: column; flex-shrink: 0; transition: transform 0.3s ease-in-out; }
+        .sidebar-header { padding: 1.5rem; text-align: center; border-bottom: 1px solid var(--sidebar-hover); }
+        .sidebar-header h1 { font-size: 1.8rem; font-weight: 500; letter-spacing: 1px; }
+        .sidebar nav { flex-grow: 1; padding: 1rem 0; }
+        .sidebar nav a { display: flex; align-items: center; gap: 1rem; color: var(--text-muted); text-decoration: none; padding: 0.9rem 1.5rem; transition: background 0.2s, color 0.2s; font-size: 1rem; }
+        .sidebar nav a:hover, .sidebar nav a.active { background-color: var(--sidebar-hover); color: var(--text-light); }
+        
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; overflow-y: auto; }
+        .main-header { display: flex; align-items: center; padding: 1rem 1.5rem; background: white; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+        #menu-toggle { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; margin-right: 1rem; }
+        .page-title { font-size: 1.5rem; font-weight: 600; }
+        .page-content { padding: 1.5rem; }
+        .page { display: none; }
+        .page.active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .kpi-card h3 { font-size: 1rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+        .kpi-card .value { font-size: 2rem; font-weight: bold; }
+        .btn { padding: 0.6rem 1.2rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        .btn-primary { background-color: var(--primary-accent); color: white; }
+        .btn-primary:hover { background-color: var(--primary-accent-hover); }
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-danger:hover { background-color: var(--danger-hover); }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-secondary { background-color: var(--text-muted); color: white; }
+        .btn:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        
+        .table-wrapper { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        th { background-color: var(--primary-bg); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; color: var(--text-muted); }
+        
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; height: 100%; z-index: 300; transform: translateX(-100%); }
+            .sidebar.visible { transform: translateX(0); box-shadow: 0 0 20px rgba(0,0,0,0.2); }
+            #menu-toggle { display: block; }
+        }
+
+        .dashboard-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.5rem; }
+        .kpi-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; }
+        .chart-container { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .main-chart { grid-column: 1 / -1; }
+        .sub-chart-1 { grid-column: 1 / -1; }
+        .sub-chart-2 { grid-column: 1 / -1; }
+        @media (min-width: 768px) { .sub-chart-1 { grid-column: span 8; } .sub-chart-2 { grid-column: span 4; } }
+        
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .status { padding: 5px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; text-align: center; color: white; }
+        .status-Pending { background-color: var(--warning); color: #333; }
+        .status-Confirmed { background-color: var(--primary-accent); }
+        .status-Cooking { background-color: #8b5cf6; }
+        .status-Out-for-Delivery { background-color: #10b981; }
+        .status-Delivered { background-color: var(--success); }
+        .status-Cancelled { background-color: var(--text-muted); }
+        .status-Failed { background-color: var(--danger); }
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary-accent); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 500; }
+        .modal-overlay.visible { display: flex; }
+        .modal-content { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+        .modal-title { font-size: 1.5rem; font-weight: 600; }
+        .modal-close-btn { background: none; border: none; font-size: 2rem; cursor: pointer; color: var(--text-muted); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+        .form-group input, .form-group textarea { width: 100%; padding: 0.7rem; border: 1px solid var(--border-color); border-radius: 6px; }
+        .prices-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div id="login-overlay"><div id="login-box"><h2>Admin Panel Login</h2><input type="password" id="admin-password" placeholder="Enter Admin Password"><button id="login-btn">Login</button><p id="login-error"></p></div></div>
+
+    <div id="admin-wrapper">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header"><h1>MOMOHOLICS</h1></div>
+            <nav>
+                <a href="#dashboard" class="nav-link active">📊 Dashboard</a>
+                <a href="#orders" class="nav-link">📦 Orders</a>
+                <a href="#menu" class="nav-link">🍽️ Menu Management</a>
+                <a href="#users" class="nav-link">👥 Users</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="main-header"><button id="menu-toggle">☰</button><h2 id="page-title" class="page-title">Dashboard</h2></header>
+            <div class="page-content">
+                <section id="dashboard" class="page active">
+                    <div class="dashboard-grid">
+                        <div class="kpi-grid" id="kpi-grid"></div>
+                        <div class="chart-container main-chart"><div class="chart-header"><h3>Earnings Overview</h3></div><canvas id="earningsChart"></canvas></div>
+                        <div class="chart-container sub-chart-1"><h3>Top Selling Items (by Quantity)</h3><canvas id="topItemsChart"></canvas></div>
+                        <div class="chart-container sub-chart-2"><h3>Sales Mix (by Revenue)</h3><canvas id="salesMixChart"></canvas></div>
+                    </div>
+                </section>
+                <section id="orders" class="page"><div class="table-wrapper"><table><thead><tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody id="orders-table-body"></tbody></table></div></section>
+                <section id="menu" class="page">
+                    <div class="page-header"><h2 class="page-title-sub">Menu Items</h2><button class="btn btn-primary" id="add-item-btn">Add New Item</button></div>
+                    <div class="table-wrapper"><table><thead><tr><th>Name</th><th>Available</th><th>Featured</th><th>Actions</th></tr></thead><tbody id="menu-table-body"></tbody></table></div>
+                </section>
+                <section id="users" class="page"><div class="table-wrapper"><table><thead><tr><th>Name</th><th>Email</th><th>Banned</th><th>Actions</th></tr></thead><tbody id="users-table-body"></tbody></table></div></section>
+            </div>
+        </main>
+    </div>
+
+    <div id="menu-item-modal" class="modal-overlay">
+        <div class="modal-content">
+            <header class="modal-header"><h3 id="modal-title" class="modal-title">Add New Menu Item</h3><button class="modal-close-btn">&times;</button></header>
+            <form id="menu-item-form"><input type="hidden" id="edit-item-id"><div class="form-group"><label for="item-name">Name</label><input type="text" id="item-name" required></div><div class="form-group"><label for="item-description">Description</label><textarea id="item-description" rows="3"></textarea></div><div class="form-group"><label>Prices</label><div class="prices-grid"><div><label for="price-buff">Buff</label><input type="number" id="price-buff" placeholder="e.g., 120"></div><div><label for="price-chicken">Chicken</label><input type="number" id="price-chicken" placeholder="e.g., 150"></div><div><label for="price-veg">Veg</label><input type="number" id="price-veg" placeholder="e.g., 110"></div><div><label for="price-pork">Pork</label><input type="number" id="price-pork" placeholder="e.g., 150"></div></div></div><div class="form-group"><label for="item-image">Main Image Path</label><input type="text" id="item-image" placeholder="e.g., media/steam.jpg"></div><div class="form-group"><label for="item-modal-image">Modal Image Path</label><input type="text" id="item-modal-image" placeholder="e.g., media/steam_closeup.jpg"></div><footer class="modal-footer"><button type="button" class="btn btn-secondary modal-close-btn">Cancel</button><button type="submit" class="btn btn-primary" id="save-item-btn">Save Item</button></footer></form>
+        </div>
+    </div>
+
+    <script>
+        // IMPORTANT: Enter a secure password here for admin access.
+        const ADMIN_PASSWORD = "";
+        
+        let appState = { earningsChart: null, topItemsChart: null, salesMixChart: null, allMenuItems: [], allUsers: [], allOrders: [] };
+
+        document.addEventListener('DOMContentLoaded', () => { if (typeof supabaseClient === 'undefined' || typeof Chart === 'undefined') { document.body.innerHTML = `<h1>Config Error: supabaseClient not defined. Check embedded script tag.</h1>`; return; } setupLogin(); });
+        
+        
+        
+        
+        function setupLogin() { const loginBtn = document.getElementById('login-btn'); const passwordInput = document.getElementById('admin-password'); const loginError = document.getElementById('login-error'); const attemptLogin = () => { if (passwordInput.value === ADMIN_PASSWORD) { document.getElementById('login-overlay').style.display = 'none'; document.getElementById('admin-wrapper').style.display = 'flex'; initAdminPanel(); } else { loginError.textContent = 'Incorrect Password'; } }; loginBtn.addEventListener('click', attemptLogin); passwordInput.addEventListener('keyup', (e) => e.key === 'Enter' && attemptLogin()); }
+        
+        function initAdminPanel() { setupNavigation(); fetchAllData(); setupEventListeners(); }
+        
+        function setupNavigation() { const sidebar = document.getElementById('sidebar'); const menuToggle = document.getElementById('menu-toggle'); const navLinks = document.querySelectorAll('.nav-link'); const pageTitle = document.getElementById('page-title'); const pages = document.querySelectorAll('.page'); menuToggle.addEventListener('click', () => sidebar.classList.toggle('visible')); navLinks.forEach(link => { link.addEventListener('click', (e) => { e.preventDefault(); const targetId = link.getAttribute('href').substring(1); navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); pages.forEach(p => p.classList.remove('active')); document.getElementById(targetId).classList.add('active'); pageTitle.textContent = link.textContent.substring(2).trim(); if (window.innerWidth <= 768) sidebar.classList.remove('visible'); }); }); }
+
+        function setupEventListeners() {
+            document.body.addEventListener('click', async (event) => {
+                if (event.target.matches('.edit-item-btn')) openMenuItemModal(event.target.dataset.id);
+                if (event.target.matches('.delete-item-btn')) { if (confirm('Are you sure you want to delete this item?')) await deleteMenuItem(event.target.dataset.id); }
+                if (event.target.matches('.cancel-order-btn')) { if (confirm('Are you sure you want to cancel this order?')) await updateOrderStatus(event.target.dataset.id, 'Cancelled'); }
+                
+                // *** FIX: Moved the update status logic to the 'click' event listener ***
+                if (event.target.matches('.update-status-btn')) {
+                    const orderId = event.target.dataset.id;
+                    const selectElement = document.querySelector(`.order-status-select[data-id="${orderId}"]`);
+                    const newStatus = selectElement.value;
+                    if (confirm(`Are you sure you want to update order #${orderId} to "${newStatus}"?`)) {
+                        await updateOrderStatus(orderId, newStatus);
+                    }
+                }
+            });
+
+            document.body.addEventListener('change', async (event) => {
+                if (event.target.matches('.user-ban-toggle')) await updateUser(event.target.dataset.id, { is_banned: event.target.checked });
+                if (event.target.matches('.menu-available-toggle')) await updateMenuItem(event.target.dataset.id, { is_available: event.target.checked });
+                if (event.target.matches('.menu-featured-toggle')) await updateMenuItem(event.target.dataset.id, { is_featured: event.target.checked });
+            });
+            
+            document.getElementById('add-item-btn').addEventListener('click', () => openMenuItemModal());
+            document.getElementById('menu-item-form').addEventListener('submit', handleMenuFormSubmit);
+            document.querySelectorAll('.modal-close-btn').forEach(btn => btn.addEventListener('click', closeMenuItemModal));
+        }
+
+        async function fetchAllData() { try { const [orders, users, menuItems] = await Promise.all([ fetchOrders(), fetchUsers(), fetchMenuItems() ]); appState = { ...appState, allOrders: orders, allUsers: users, allMenuItems: menuItems }; renderAnalytics(); renderOrdersTable(orders); renderUsersTable(users); renderMenuTable(menuItems); renderAllCharts(); } catch (error) { console.error("Failed to load admin data:", error.message); alert("Could not load data. Check console for details."); } }
+        
+        async function fetchOrders() { const { data, error } = await supabaseClient.from('product_placement').select('*').order('created_at', { ascending: false }); if (error) throw error; return data; }
+        async function fetchUsers() { const { data, error } = await supabaseClient.from('users').select('*'); if (error) throw error; return data; }
+        async function fetchMenuItems() { const { data, error } = await supabaseClient.from('menu_items').select('*').order('id', { ascending: true }); if (error) throw error; return data; }
+        
+        async function updateUser(userId, updates) { const { error } = await supabaseClient.from('users').update(updates).eq('id', userId); if (error) console.error('Error updating user:', error); }
+        async function updateMenuItem(itemId, updates) { const { error } = await supabaseClient.from('menu_items').update(updates).eq('id', itemId); if (error) console.error('Error updating item:', error); }
+
+async function updateOrderStatus(orderId, status) {
+    try {
+        // We now call the secure Edge Function instead of updating the table directly
+        const { error } = await supabaseClient.functions.invoke('update-order-status', {
+            body: { order_id: orderId, status: status },
+        });
+
+        if (error) {
+            throw error; // If the function returns an error, throw it
+        }
+
+        // Add success feedback!
+        alert(`Order #${orderId} successfully updated to "${status}"! A notification has been sent to the user.`);
+        await fetchAllData(); // Refresh the table to show the new status and actions
+    } catch (error) {
+        console.error('Error updating order:', error);
+        // Add error feedback!
+        alert(`Failed to update order. Error: ${error.message}`);
+    }
+}
+
+        async function handleMenuFormSubmit(event) {
+            event.preventDefault();
+            const saveBtn = document.getElementById('save-item-btn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            const itemId = document.getElementById('edit-item-id').value;
+            try {
+                const itemData = {
+                    name: document.getElementById('item-name').value,
+                    description: document.getElementById('item-description').value,
+                    prices: {
+                        Buff: Number(document.getElementById('price-buff').value) || null,
+                        Chicken: Number(document.getElementById('price-chicken').value) || null,
+                        Veg: Number(document.getElementById('price-veg').value) || null,
+                        Pork: Number(document.getElementById('price-pork').value) || null
+                    },
+                    imagePath: document.getElementById('item-image').value.trim() || null,
+                    modalImagePath: document.getElementById('item-modal-image').value.trim() || null
+                };
+                const { error } = itemId ? await supabaseClient.from('menu_items').update(itemData).eq('id', itemId) : await supabaseClient.from('menu_items').insert([itemData]);
+                if (error) throw error;
+                closeMenuItemModal();
+                await fetchAllData();
+            } catch (error) { console.error('Error saving menu item:', error); alert('Failed to save menu item.'); } finally { saveBtn.disabled = false; saveBtn.textContent = 'Save Item'; }
+        }
+
+        async function deleteMenuItem(itemId) {
+            const { error } = await supabaseClient.from('menu_items').delete().eq('id', itemId);
+            if (error) { console.error('Error deleting item:', error); alert('Failed to delete item.'); } else { await fetchAllData(); }
+        }
+        
+        function openMenuItemModal(itemId = null) {
+            const form = document.getElementById('menu-item-form');
+            form.reset();
+            const modal = document.getElementById('menu-item-modal');
+            const title = document.getElementById('modal-title');
+            if (itemId) {
+                const item = appState.allMenuItems.find(i => i.id == itemId);
+                if (!item) return;
+                title.textContent = 'Edit Menu Item';
+                document.getElementById('edit-item-id').value = item.id;
+                document.getElementById('item-name').value = item.name;
+                document.getElementById('item-description').value = item.description || '';
+                document.getElementById('item-image').value = item.imagePath || '';
+                document.getElementById('item-modal-image').value = item.modalImagePath || '';
+                if (item.prices) {
+                    document.getElementById('price-buff').value = item.prices.Buff || '';
+                    document.getElementById('price-chicken').value = item.prices.Chicken || '';
+                    document.getElementById('price-veg').value = item.prices.Veg || '';
+                    document.getElementById('price-pork').value = item.prices.Pork || '';
+                }
+            } else {
+                title.textContent = 'Add New Menu Item';
+                document.getElementById('edit-item-id').value = '';
+            }
+            modal.classList.add('visible');
+        }
+        function closeMenuItemModal() { document.getElementById('menu-item-modal').classList.remove('visible'); }
+        
+        
+        // in admin.html, inside the main <script> tag at the bottom
+
+function renderOrdersTable(orders) {
+    const tbody = document.getElementById('orders-table-body');
+    if (!orders || orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6">No orders found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = orders.map(order => {
+        // This function builds the action dropdown based on the current status
+        const generateActionControls = (status, orderId) => {
+            let options = '';
+            // Only show actions for non-final statuses
+            if (['Delivered', 'Cancelled', 'Failed'].includes(status)) {
+                return '<span>Completed</span>';
+            }
+
+            // Define valid next steps for each status
+            switch (status) {
+                case 'Pending':
+                    options = `
+                        <option value="Confirmed">Confirm</option>
+                        <option value="Cancelled">Cancel</option>
+                    `;
+                    break;
+                case 'Confirmed':
+                    options = `
+                        <option value="Cooking">Start Cooking</option>
+                        <option value="Cancelled">Cancel</option>
+                    `;
+                    break;
+                case 'Cooking':
+                    options = `
+                        <option value="Out for Delivery">Out for Delivery</option>
+                    `;
+                    break;
+                case 'Out for Delivery':
+                    options = `
+                        <option value="Delivered">Delivered</option>
+                        <option value="Failed">Delivery Failed</option>
+                    `;
+                    break;
+            }
+
+            return `
+                <select class="order-status-select" data-id="${orderId}">
+                    ${options}
+                </select>
+                <button class="btn btn-primary btn-sm update-status-btn" data-id="${orderId}">Update</button>
+            `;
+        };
+        const statusClass = order.status.replace(/\s+/g, '-');
+
+        return `
+            <tr>
+                <td>#${order.order_id}</td>
+                <td><strong>${order.customer_name}</strong><br><small>${order.customer_phone}</small></td>
+                <td>${order.items.map(i => `${i.quantity}x ${i.name}`).join('<br>')}</td>
+                <td>Rs. ${order.total_price}</td>
+                <td><span class="status status-${statusClass}">${order.status}</span></td>
+                <td class="order-actions">${generateActionControls(order.status, order.order_id)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+        
+        function renderMenuTable(menuItems) { const tbody = document.getElementById('menu-table-body'); if (!menuItems || menuItems.length === 0) { tbody.innerHTML = '<tr><td colspan="4">No menu items found.</td></tr>'; return; } tbody.innerHTML = menuItems.map(i => `<tr><td><strong>${i.name}</strong></td><td><label class="toggle-switch"><input type="checkbox" class="menu-available-toggle" data-id="${i.id}" ${i.is_available ? 'checked' : ''}><span class="slider"></span></label></td><td><label class="toggle-switch"><input type="checkbox" class="menu-featured-toggle" data-id="${i.id}" ${i.is_featured ? 'checked' : ''}><span class="slider"></span></label></td><td><button class="btn btn-primary btn-sm edit-item-btn" data-id="${i.id}">Edit</button> <button class="btn btn-danger btn-sm delete-item-btn" data-id="${i.id}">Delete</button></td></tr>`).join(''); }
+        function renderUsersTable(users) { const tbody = document.getElementById('users-table-body'); if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="4">No users found.</td></tr>'; return; } tbody.innerHTML = users.map(user => `<tr><td>${user.name || 'N/A'}</td><td>${user.email || 'N/A'}</td><td><label class="toggle-switch"><input type="checkbox" class="user-ban-toggle" data-id="${user.id}" ${user.is_banned ? 'checked' : ''}><span class="slider"></span></label></td><td><!-- Actions can be added here --></td></tr>`).join(''); }
+        
+        function renderAnalytics() { const confirmedOrders = appState.allOrders.filter(o => o.status === 'Confirmed'); const totalRevenue = confirmedOrders.reduce((sum, order) => sum + order.total_price, 0); const totalOrders = confirmedOrders.length; const averageOrderValue = totalOrders > 0 ? (totalRevenue / totalOrders) : 0; const grid = document.getElementById('kpi-grid'); grid.innerHTML = `<div class="card kpi-card"><h3>Total Revenue</h3><p class="value">Rs. ${totalRevenue.toFixed(2)}</p></div><div class="card kpi-card"><h3>Confirmed Orders</h3><p class="value">${totalOrders}</p></div><div class="card kpi-card"><h3>Avg. Order Value</h3><p class="value">Rs. ${averageOrderValue.toFixed(2)}</p></div><div class="card kpi-card"><h3>Total Users</h3><p class="value">${appState.allUsers.length}</p></div>`; }
+        
+        function renderAllCharts() {
+            renderEarningsChart();
+            renderTopItemsChart();
+            renderSalesMixChart();
+        }
+
+        function renderEarningsChart() {
+            const confirmedOrders = appState.allOrders.filter(o => o.status === 'Confirmed');
+            const dailyData = {};
+            confirmedOrders.forEach(order => {
+                const date = new Date(order.created_at).toLocaleDateString();
+                dailyData[date] = (dailyData[date] || 0) + order.total_price;
+            });
+            const labels = Object.keys(dailyData).sort((a,b) => new Date(a) - new Date(b));
+            const data = labels.map(label => dailyData[label]);
+            const ctx = document.getElementById('earningsChart').getContext('2d');
+            if(appState.earningsChart) appState.earningsChart.destroy();
+            appState.earningsChart = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ label: 'Daily Earnings (Rs)', data, borderColor: '#3b82f6', fill: true }] } });
+        }
+
+        function renderTopItemsChart() {
+            const itemCounts = {};
+            appState.allOrders.filter(o => o.status === 'Confirmed').forEach(order => { order.items.forEach(item => { itemCounts[item.name] = (itemCounts[item.name] || 0) + item.quantity; }); });
+            const sortedItems = Object.entries(itemCounts).sort(([,a],[,b]) => b-a).slice(0, 5);
+            const ctx = document.getElementById('topItemsChart').getContext('2d');
+            if(appState.topItemsChart) appState.topItemsChart.destroy();
+            appState.topItemsChart = new Chart(ctx, { type: 'bar', data: { labels: sortedItems.map(i => i[0]), datasets: [{ label: 'Units Sold', data: sortedItems.map(i => i[1]), backgroundColor: '#10b981' }] }, options: { indexAxis: 'y' } });
+        }
+        
+        function renderSalesMixChart() {
+            const revenueMix = {};
+            appState.allOrders.filter(o => o.status === 'Confirmed').forEach(order => { order.items.forEach(item => { revenueMix[item.name] = (revenueMix[item.name] || 0) + (item.quantity * item.pricePerPlate); }); });
+            const sortedMix = Object.entries(revenueMix).sort(([,a],[,b]) => b-a);
+            const ctx = document.getElementById('salesMixChart').getContext('2d');
+            if(appState.salesMixChart) appState.salesMixChart.destroy();
+            appState.salesMixChart = new Chart(ctx, { type: 'doughnut', data: { labels: sortedMix.map(item => item[0]), datasets: [{ label: 'Revenue (Rs)', data: sortedMix.map(item => item[1]), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'] }] } });
+        }
+    </script>
+</body>
+</html>

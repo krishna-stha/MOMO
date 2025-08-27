@@ -173,7 +173,7 @@ function subscribeToOrderUpdates(userId) {
             schema: 'public',
             table: 'product_placement',
             filter: `user_id=eq.${userId}`
-        }, (payload) => {
+        }, async (payload) => { // *** Made this function async ***
             const updatedOrder = payload.new;
             let message = '';
             
@@ -203,6 +203,15 @@ function subscribeToOrderUpdates(userId) {
                     message = `❗️ Delivery for order #${updatedOrder.order_id} failed. Please contact us.`;
                     showToast(message, 'error');
                     break;
+            }
+
+            // *** FIX ADDED HERE ***
+            // After showing the toast, check if the profile modal is currently open.
+            // If it is, refresh the order history list to show the new status instantly.
+            const profileModal = document.getElementById('profileModal');
+            if (profileModal && profileModal.style.display === 'block') {
+                const updatedOrders = await fetchUserOrders();
+                renderOrderHistory(updatedOrders);
             }
         })
         .subscribe((status, err) => {
